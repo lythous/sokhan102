@@ -1,0 +1,9 @@
+{
+  "output_folder": "/mnt/E0B80D7EB80D5506/sokhan/out",
+  "input_folder": "/mnt/E0B80D7EB80D5506/sokhan/sokhan-img",
+  "current_entry_index": 0,
+  "process_column_params": "",
+  "process_entry_params": "",
+  "process_head_word_params": "cfg_head_word_min_area = 200\ncfg_head_word_bold_thresh = 30\ncfg_entry_vertical_offset = (0, 0)\ncfg_head_word_offset = (0, 0, 0, 0)",
+  "input_files_process_params": "150"
+}
