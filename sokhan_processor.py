@@ -285,6 +285,6 @@ def test():
 
 if __name__ == '__main__':
     print("Sokhan Processor Test")
-    image = cv2.imread("/mnt/E0B80D7EB80D5506/sokhan/out/columns/0150_0.png")
+    image = cv2.imread("/mnt/E0B80D7EB80D5506/sokhan/out/columns/0150_1.png")
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    find_height_of_text_divider_lines_new(image)
+    find_height_of_text_divider_lines(image)

@@ -16,7 +16,7 @@ def horizontal_projection_profile_normalized(binary_image):
     return projection_normalized
 
 
-def find_height_of_text_divider_lines_new(gray_image, no_of_text_lines = 36, y0_search_factor = 0.5, scale_search_factor = 0.2, scale_search_step = 0.002, offset_y_start = 0, offset_y_end = 0, debug=False):
+def find_height_of_text_divider_lines(gray_image, no_of_text_lines = 36, y0_search_factor = 0.5, scale_search_factor = 0.2, scale_search_step = 0.002, offset_y_start = 0, offset_y_end = 0, debug=False):
     height, width = gray_image.shape
 
     # Binarize the image: text is black (0), background is white (255)
@@ -33,7 +33,7 @@ def find_height_of_text_divider_lines_new(gray_image, no_of_text_lines = 36, y0_
 
     print(density_gray)
     _, _, _, lines = find_best_line_grid(density, no_of_text_lines, np.arange(0, int(y0_search_factor * height // no_of_text_lines)), np.arange(1 - scale_search_factor, 1 + scale_search_factor, scale_search_step))
-    lines = readjust_dividing_lines(lines, density)
+    lines = readjust_dividing_lines(lines, density, search_range = 5)
 
     # Offset the dividers based on the provided values
     total_offset = offset_y_end - offset_y_start
@@ -41,8 +41,8 @@ def find_height_of_text_divider_lines_new(gray_image, no_of_text_lines = 36, y0_
     lines = [y + offset for y, offset in zip(lines, lines_offset)]
     lines = [min(max(y, 0), height) for y in lines]
 
-    mid_lines = [(lines[i] + lines[i + 1]) // 2 for i in range(len(lines) - 1)]
-    print(lines)
+    #mid_lines = [(lines[i] + lines[i + 1]) // 2 for i in range(len(lines) - 1)]
+    #print(lines)
 
 
     if debug:
@@ -64,6 +64,8 @@ def find_height_of_text_divider_lines_new(gray_image, no_of_text_lines = 36, y0_
 
         cv2.imshow("Density", density_image)
         cv2.waitKey()
+
+    return lines
 
 
 def find_best_line_grid(density_profile,
@@ -89,12 +91,16 @@ def find_best_line_grid(density_profile,
     density = np.asarray(density_profile)
     height = len(density)
 
-    base_spacing = height / (num_text_lines + 1)
+    num_dividing_lines = num_text_lines + 1
+
+    base_spacing = height / num_dividing_lines
 
     min_total = np.inf
     best_y0 = None
     best_scale = None
     best_lines = None
+
+
 
     for y0 in y0_range:
         for scale in scale_range:
@@ -115,6 +121,7 @@ def find_best_line_grid(density_profile,
                 best_y0 = y0
                 best_scale = scale
                 best_lines = line_indices
+
 
     return best_y0, best_scale, min_total, best_lines
 

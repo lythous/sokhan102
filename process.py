@@ -100,10 +100,7 @@ def process_column(image_column,
 
     # --- 1. Detection Phase ---
     # Get absolute Y-coordinates of visual divider lines (e.g., horizontal rules)
-    all_dividers = find_height_of_text_divider_lines(image_column, debug=True)
-    """,
-                                                     offset_y_start = dividing_lines_offset_y_start,
-                                                     offset_y_end = dividing_lines_offset_y_end)"""
+    all_dividers = find_height_of_text_divider_lines(image_column, offset_y_start = dividing_lines_offset_y_start, offset_y_end = dividing_lines_offset_y_end)
 
     # Get absolute Y-coordinates where new entries logically begin
     entries_start_top_y = find_entries_top_y(image_column, all_dividers,
@@ -160,6 +157,7 @@ def process_column(image_column,
 
             # Relative dividers for the bottom chunk
             entries_dividing_lines.append([y - last_y for y in all_dividers if y >= last_y])
+            entries_dividing_lines[-1].append(img_h - last_y)
             entries_type.append("Entry")
 
     return all_dividers, entries_start_top_y, entries_rect, entries_dividing_lines, entries_type
