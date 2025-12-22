@@ -112,75 +112,7 @@ def find_entries_top_y(image_column, dividing_lines, search_band_width_right = 4
     return entries_y
 
 
-def detect_head_word(image_column, entries_y, dividing_lines, min_area, bold_thresh, debug = False):
-    head_words_rect = []
-    for i, y in enumerate(entries_y):
-
-        y_next_line = dividing_lines[dividing_lines.index(y) + 1]
-        entry_image_top_line = image_column[y:y_next_line, :]
-
-        # --- Filter bold text (head words) ---
-        # By using erode and filter I'm trying to detect just bold text which are hopefully head words.
-        kernel = np.ones((2, 2), np.uint8) # Filter parameter 1. To be changed for best results.
-        erode = cv2.erode(cv2.bitwise_not(entry_image_top_line), kernel, iterations=4)  # Filter parameter 2. To be changed for best results.
-        erode = cv2.bitwise_not(erode)
-        _, binary = cv2.threshold(erode, bold_thresh, 255, cv2.THRESH_BINARY) # Filter parameter 3. More = Less sensitive
-        filtered_head_word = remove_small_areas(binary, min_area) # Filter parameter 4. To be changed for best results.
-
-        if debug:
-            print(f"Detecting head word region for entry {i}")
-            cv2.imshow("Head word binary", binary)
-            cv2.imshow("Head word erode", erode)
-            cv2.imshow("Head word filtered (small black areas removed)", filtered_head_word)
-
-
-        # Find those words in the original page image that overlap with filtered head words regions.
-        #if find_containing_region(filtered_head_word) is not None:
-        #    x1_hw_fil, _, x2_hw_fil, _ = find_containing_region(filtered_head_word)
-        #else:
-        #    x1_hw_fil = entry_image_top_line.shape[1]
-        #    x2_hw_fil = x1_hw_fil
-        #    print("Head word filtering parameters are too harsh.")
-
-        words_rect = words_segmentation(entry_image_top_line, debug)
-        # The rightest word is always a part of head word
-        head_word_rects = [words_rect[-1]]
-        # The main question is whether the one word before last right word is also a part of head word or not?
-        # In other words, whether the head word is two word or single work?
-        if len(words_rect) > 1:
-            if is_rectangle_nonempty(words_rect[-2], filtered_head_word):
-                head_word_rects.append(words_rect[-2])
-                print(f"Entry {i} has two head words.")
-        else:
-            warnings.warn(f"Head word detection for entry {i} has failed.")
-
-        # Find the rectangle that contain all other rectangles.
-        x1_hw, y1_hw, x2_hw, y2_hw = head_word_rects[0]
-        head_word_rect = (x1_hw, y1_hw, x2_hw, y2_hw)
-        for rect in head_word_rects:
-            x1, y1, x2, y2 = rect
-            x1_hw = min(x1_hw, x1)
-            y1_hw = min(y1_hw, y1)
-            x2_hw = max(x2_hw, x2)
-            y2_hw = max(y2_hw, y2)
-
-        # Offset head word rectangle height to the entry height
-        head_word_rect = (x1_hw, y1_hw+y, x2_hw, y2_hw+y)
-
-        if debug:
-            # Draw rectangle around head words
-            img_debug = entry_image_top_line.copy()
-            img_debug = cv2.cvtColor(img_debug, cv2.COLOR_GRAY2BGR)
-            cv2.rectangle(img_debug, (x1_hw, y1_hw), (x2_hw, y2_hw), (0, 0, 255), 1)
-            cv2.imshow("Head word detection box", img_debug)
-            cv2.waitKey()
-
-
-        head_words_rect.append(head_word_rect)
-    return head_words_rect
-
-
-def detect_entry_head_word(entry_first_line_image, min_area=160, bold_thresh=30, debug=False):
+def detect_entry_head_word(entry_first_line_image, min_area=160, bold_thresh=30, debug=True):
     """
     Detects the "Head Word" (main dictionary entry) by identifying bold text
     in the top-right region of an image entry (Optimized for RTL languages like Arabic/Persian).
@@ -261,7 +193,7 @@ def detect_entry_head_word(entry_first_line_image, min_area=160, bold_thresh=30,
     head_word_rect = (x1_hw, y1_hw, x2_hw, y2_hw)
 
     if debug:
-        img_debug = cv2.cvtColor(entry_header_crop.copy(), cv2.COLOR_GRAY2BGR)
+        img_debug = cv2.cvtColor(entry_first_line_image.copy(), cv2.COLOR_GRAY2BGR)
         cv2.rectangle(img_debug, (x1_hw, y1_hw), (x2_hw, y2_hw), (0, 0, 255), 2)
         cv2.imshow("Final Head Word", img_debug)
         cv2.waitKey(0)  # Wait for key press to continue
