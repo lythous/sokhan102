@@ -123,6 +123,7 @@ class SokhanProcessor:
             self.out_txt_headwords[i] = [None] * len(self.out_rect_entries[i])
 
 
+
     def process_all_entries(self):
         for i, image_column in enumerate(self.out_img_columns):
             for j, entry_rect in enumerate(self.out_rect_entries[i]):
