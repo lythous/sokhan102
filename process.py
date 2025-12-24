@@ -164,7 +164,7 @@ def process_column(image_column,
 
 
 def process_single_entry(image_column, entry_rect, entry_type, entry_relative_dividing_lines,
-                         head_word_min_area = 160, head_word_bold_thresh = 30,
+                         head_word_min_area = 160, head_word_bold_thresh = 30, boldness_thresh = 1, width_thresh = 10,
                          entry_vertical_offset = (0, 0), head_word_offset = (0, 0, 0, 0)):
     if entry_rect is None:
         # If entry_rect is None, it means it is a reserved space for a nonexisting continuation entry.
@@ -177,9 +177,10 @@ def process_single_entry(image_column, entry_rect, entry_type, entry_relative_di
 
     entry_first_line_image = entry_image[0:entry_relative_dividing_lines[1]+entry_top_offset, :]
 
-    head_word_rect = detect_entry_head_word(entry_first_line_image, head_word_min_area, head_word_bold_thresh)
+
 
     if entry_type == "Entry":
+        head_word_rect = detect_entry_head_word(entry_first_line_image, head_word_min_area, head_word_bold_thresh, boldness_thresh, width_thresh)
         head_word_image, head_word_rect_new = extract_image_at_region(entry_image, head_word_rect, head_word_offset)
     else:
         # If the entry is a continuation, there is no head word.

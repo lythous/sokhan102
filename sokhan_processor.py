@@ -10,18 +10,24 @@ import pytesseract
 class SokhanProcessor:
 
     def __init__(self, input_folder, output_folder):
+
         # -------- Processing configs --------
         self.page_index = None
         self.verbose = False
+
         # Entries detection configs
         self.cfg_entries_detection_search_width_band = 40
         self.cfg_dividing_lines_offset_y_start = 0
         self.cfg_dividing_lines_offset_y_end = 0
+
         # Head word detection configs
         self.cfg_head_word_min_area = 160
         self.cfg_head_word_bold_thresh = 30
+        self.cfg_head_word_boldness_thresh = 1
+        self.cfg_head_word_width_thresh = 10
         self.cfg_entry_vertical_offset = (0, 0)
         self.cfg_head_word_offset = (0, 0, 0, 0)
+
         # Tesseract configs
         self.cfg_tesseract_config = r'-l sokhan_ocr_model --tessdata-dir ./tessdata/ --psm 7  --oem 3'
 
@@ -40,17 +46,19 @@ class SokhanProcessor:
 
         # -------- Output variables (results of processing) --------
         # In all the tuples below, index 0 is for right column and index 1 is for left column.
-        self.image_columns = [None, None]
-        self.image_columns_guiding_lines =  [None, None]
-        self.text_line_dividers = [[], []]
-        self.entries_start_top_y =  [[], []]
-        self.entries_rect =  [[],[]]
-        self.entries_dividing_lines =  [[],[]]
-        self.entries_type =  [[],[]]
-        self.entries_images =  [[],[]]
-        self.head_word_images =  [[],[]]
-        self.head_words_rect =  [[],[]]
-        self.head_words_text =  [[],[]]
+        self.out_img_columns = [None, None]
+        self.out_img_columns_with_guiding_lines =  [None, None]
+        self.out_column_divider_lines_y = [[], []]
+
+        self.out_entries_start_top_y =  [[], []]
+        self.out_rect_entries =  [[], []]
+        self.out_entries_divider_lines_y =  [[], []]
+        self.out_typ_entries =  [[], []]
+        self.out_img_entries =  [[], []]
+
+        self.out_img_headwords =  [[], []]
+        self.out_rect_headwords =  [[], []]
+        self.out_txt_headwords =  [[], []]
 
         self.update_folders(input_folder, output_folder)
 
@@ -92,32 +100,32 @@ class SokhanProcessor:
     def preprocess_page(self):
         self.image_page_input = cv2.imread(str(self.input_page_image_path))
         self.image_page_preprocessed = preprocess(self.image_page_input)
-        self.image_columns = separate_columns(self.image_page_preprocessed)
+        self.out_img_columns = separate_columns(self.image_page_preprocessed)
         if self.verbose:
-            print(f"Preprocessing page {self.page_index} done. Two columns separated.")
+            print(f"Page Preprocessed: {self.page_index:04d}")
 
 
     def process_both_columns(self):
-        for i, image_column in enumerate(self.image_columns):
-            self.text_line_dividers[i], self.entries_start_top_y[i], self.entries_rect[i], self.entries_dividing_lines[i], self.entries_type[i] = (
+        for i, image_column in enumerate(self.out_img_columns):
+            self.out_column_divider_lines_y[i], self.out_entries_start_top_y[i], self.out_rect_entries[i], self.out_entries_divider_lines_y[i], self.out_typ_entries[i] = (
                 process_column(image_column, self.cfg_entries_detection_search_width_band,
                                self.cfg_dividing_lines_offset_y_start, self.cfg_dividing_lines_offset_y_end))
             if self.verbose:
-                print(f"Column {i} of page {self.page_index} processed successfully.")
+                print(f"Column processed: {self.page_index}_{i}")
         self.initialize_output_entry_and_headword_variables()
 
 
     def initialize_output_entry_and_headword_variables(self):
         for i in range(2):
-            self.entries_images[i] = [None] * len(self.entries_rect[i])
-            self.head_word_images[i] = [None] * len(self.entries_rect[i])
-            self.head_words_rect[i] = [None] * len(self.entries_rect[i])
-            self.head_words_text[i] = [None] * len(self.entries_rect[i])
+            self.out_img_entries[i] = [None] * len(self.out_rect_entries[i])
+            self.out_img_headwords[i] = [None] * len(self.out_rect_entries[i])
+            self.out_rect_headwords[i] = [None] * len(self.out_rect_entries[i])
+            self.out_txt_headwords[i] = [None] * len(self.out_rect_entries[i])
 
 
     def process_all_entries(self):
-        for i, image_column in enumerate(self.image_columns):
-            for j, entry_rect in enumerate(self.entries_rect[i]):
+        for i, image_column in enumerate(self.out_img_columns):
+            for j, entry_rect in enumerate(self.out_rect_entries[i]):
                 self.process_single_entry((i, j), draw_guiding_lines = False)
 
         self.draw_guiding_lines()
@@ -125,16 +133,17 @@ class SokhanProcessor:
 
     def process_single_entry(self, entry_address, draw_guiding_lines = True):
         column_side, entry_index = entry_address
-        (self.entries_images[column_side][entry_index], self.head_word_images[column_side][entry_index],
-         self.entries_rect[column_side][entry_index], self.head_words_rect[column_side][entry_index]) = (
-            process_single_entry(self.image_columns[column_side], self.entries_rect[column_side][entry_index],
-                                 self.entries_type[column_side][entry_index],
-                                 self.entries_dividing_lines[column_side][entry_index], self.cfg_head_word_min_area,
-                                 self.cfg_head_word_bold_thresh, self.cfg_entry_vertical_offset, self.cfg_head_word_offset))
+        (self.out_img_entries[column_side][entry_index], self.out_img_headwords[column_side][entry_index],
+         self.out_rect_entries[column_side][entry_index], self.out_rect_headwords[column_side][entry_index]) = (
+            process_single_entry(self.out_img_columns[column_side], self.out_rect_entries[column_side][entry_index],
+                                 self.out_typ_entries[column_side][entry_index],
+                                 self.out_entries_divider_lines_y[column_side][entry_index], self.cfg_head_word_min_area,
+                                 self.cfg_head_word_bold_thresh, self.cfg_head_word_boldness_thresh, self.cfg_head_word_width_thresh, self.cfg_entry_vertical_offset, self.cfg_head_word_offset))
         if self.verbose:
-            print(f"Entry {entry_index} of column {column_side} of page {self.page_index} processed successfully.")
+            print(f"Entry Processed:  {self.page_index:04d}_{column_side}_{entry_index:02d}")
+            print("------------------------")
 
-        self.head_words_text[column_side][entry_index] = self.ocr_single_head_word(entry_address)
+        self.out_txt_headwords[column_side][entry_index] = self.ocr_single_head_word(entry_address)
 
         self.save_single_entry_and_headword(entry_address)
         if draw_guiding_lines:
@@ -143,7 +152,7 @@ class SokhanProcessor:
 
     def ocr_single_head_word(self, entry_address):
         column_side, entry_index = entry_address
-        head_word_image = self.head_word_images[column_side][entry_index]
+        head_word_image = self.out_img_headwords[column_side][entry_index]
         if head_word_image is not None:
             text = pytesseract.image_to_string(head_word_image, config=self.cfg_tesseract_config)
             return text
@@ -152,20 +161,20 @@ class SokhanProcessor:
 
         
     def draw_guiding_lines(self):
-        for i, image_column in enumerate(self.image_columns):
-            self.image_columns_guiding_lines[i] = (
-                draw_guiding_lines(image_column, self.text_line_dividers[i], self.entries_start_top_y[i],
-                                   self.head_words_rect[i], self.cfg_entries_detection_search_width_band))
+        for i, image_column in enumerate(self.out_img_columns):
+            self.out_img_columns_with_guiding_lines[i] = (
+                draw_guiding_lines(image_column, self.out_column_divider_lines_y[i], self.out_entries_start_top_y[i],
+                                   self.out_rect_headwords[i], self.cfg_entries_detection_search_width_band))
 
 
     def save_both_columns(self):
-        for i, image_column in enumerate(self.image_columns):
+        for i, image_column in enumerate(self.out_img_columns):
             if image_column is not None:
                 cv2.imwrite(str(self.output_columns_folder / f"{self.page_index:04d}_{i}.png"), image_column)
 
 
     def save_guiding_lines(self):
-        for i, image_column in enumerate(self.image_columns_guiding_lines):
+        for i, image_column in enumerate(self.out_img_columns_with_guiding_lines):
             if image_column is not None:
                 cv2.imwrite(str(self.output_guiding_lines_folder / f"{self.page_index:04d}_{i}.png"), image_column)
 
@@ -174,21 +183,21 @@ class SokhanProcessor:
         column_side, entry_index = entry_address
 
         # Save entry image
-        if self.entries_images[column_side][entry_index] is not None:
+        if self.out_img_entries[column_side][entry_index] is not None:
             # In each page entry index 0 is reserved for a continuation entry if exists.
             cv2.imwrite(str(self.output_entries_folder / f"{self.page_index:04d}_{column_side}_{entry_index:02d}.png"),
-                        self.entries_images[column_side][entry_index])
+                        self.out_img_entries[column_side][entry_index])
 
             # Save head word image
-            if self.head_word_images[column_side][entry_index] is not None:
+            if self.out_img_headwords[column_side][entry_index] is not None:
                 cv2.imwrite(str(self.output_head_words_folder / f"{self.page_index:04d}_{column_side}_{entry_index:02d}.png"),
-                            self.head_word_images[column_side][entry_index])
+                            self.out_img_headwords[column_side][entry_index])
                 with open(str(self.output_head_words_folder / f"{self.page_index:04d}_{column_side}_{entry_index:02d}.gt.txt"), "w") as f:
-                    f.write(str(self.head_words_text[column_side][entry_index]))
+                    f.write(str(self.out_txt_headwords[column_side][entry_index]))
 
 
     def save_all_entries_and_headwords(self):
-        for i, column_entries in enumerate(self.entries_images):
+        for i, column_entries in enumerate(self.out_img_entries):
             for j, entry_image in enumerate(column_entries):
                 self.save_single_entry_and_headword((i, j))
 

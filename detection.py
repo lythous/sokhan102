@@ -112,7 +112,7 @@ def find_entries_top_y(image_column, dividing_lines, search_band_width_right = 4
     return entries_y
 
 
-def detect_entry_head_word(entry_first_line_image, min_area=160, bold_thresh=30, debug=True):
+def detect_entry_head_word(entry_first_line_image, min_area=160, bold_thresh=30, boldness_thresh = 1, width_thresh = 10, debug=False):
     """
     Detects the "Head Word" (main dictionary entry) by identifying bold text
     in the top-right region of an image entry (Optimized for RTL languages like Arabic/Persian).
@@ -135,7 +135,13 @@ def detect_entry_head_word(entry_first_line_image, min_area=160, bold_thresh=30,
     # Logic: Thin text disappears when eroded. Bold text shrinks but remains.
 
     # Invert image (Text=White, BG=Black) for correct morphological operation
+    entry_first_line_image = remove_small_areas(entry_first_line_image, 20)
+    cv2.imshow("entry_first_line_image", entry_first_line_image)
+
     img_inverted = cv2.bitwise_not(entry_first_line_image)
+
+
+    skeleton = cv2.ximgproc.thinning(img_inverted, thinningType=cv2.ximgproc.THINNING_ZHANGSUEN)
 
     # Erode: shrinks white regions. 4 iterations is aggressive, intended to wipe out normal fonts.
     kernel = np.ones((2, 2), np.uint8)
@@ -152,9 +158,11 @@ def detect_entry_head_word(entry_first_line_image, min_area=160, bold_thresh=30,
 
     if debug:
         print("DEBUG: Visualizing bold text isolation steps.")
-        cv2.imshow("1. Binary Bold Mask", binary_bold_mask)
-        cv2.imshow("2. Eroded Image", eroded_img)
-        cv2.imshow("3. Cleaned Mask", clean_bold_mask)
+        cv2.imshow("1. Image of first line of entry", entry_first_line_image)
+        cv2.imshow("2. Binary Bold Mask", binary_bold_mask)
+        cv2.imshow("3. Eroded Image", eroded_img)
+        cv2.imshow("4. Cleaned Mask", clean_bold_mask)
+        cv2.imshow("5. Skeleton", skeleton)
 
     # --- 3. Word Segmentation ---
     # Get bounding boxes for all words in the header
@@ -175,14 +183,61 @@ def detect_entry_head_word(entry_first_line_image, min_area=160, bold_thresh=30,
     right_most_word = word_boxes[-1]
     detected_hw_boxes.append(right_most_word)
 
+    # Boldness = (Number of white pixels in the word) / (Number of white pixels in the skeleton of the word) [Both are inverted]
+    # Calculate boldness of the right most word
+    if debug:
+        for i, (x1, y1, x2, y2) in enumerate(word_boxes):
+            word_area = np.count_nonzero(img_inverted[y1:y2, x1:x2])
+            word_path_length = skeleton_path_length(skeleton[y1:y2, x1:x2])
+            boldness = word_area / word_path_length
+            print(f"DEBUG: Word ({i}) boldness: {boldness}, area: {word_area}, path length: {word_path_length}")
+
+    right_most_word_boldness = (np.count_nonzero(img_inverted[right_most_word[1]:right_most_word[3], right_most_word[0]:right_most_word[2]])/
+                                np.count_nonzero(skeleton[right_most_word[1]:right_most_word[3], right_most_word[0]:right_most_word[2]]))
+
     # Check the second-to-last word (neighbor to the left).
     # If it overlaps with our "clean_bold_mask", it is also part of the head word.
     if len(word_boxes) > 1:
         second_to_last_word = word_boxes[-2]
-        if is_rectangle_nonempty(second_to_last_word, clean_bold_mask):
+        second_to_last_word_area = np.count_nonzero(entry_first_line_image[second_to_last_word[1]:second_to_last_word[3], second_to_last_word[0]:second_to_last_word[2]])
+        #second_to_last_word_path_length = np.count_nonzero(skeleton[second_to_last_word[1]:second_to_last_word[3], second_to_last_word[0]:second_to_last_word[2]])
+        second_to_last_word_path_length = skeleton_path_length(skeleton[second_to_last_word[1]:second_to_last_word[3], second_to_last_word[0]:second_to_last_word[2]])
+        second_to_last_word_boldness = (second_to_last_word_area / second_to_last_word_path_length)
+        second_to_last_word_width = second_to_last_word[2] - second_to_last_word[0]
+        second_to_last_word_height = second_to_last_word[3] - second_to_last_word[1]
+
+        right_most_word_area = np.count_nonzero(entry_first_line_image[right_most_word[1]:right_most_word[3], right_most_word[0]:right_most_word[2]])
+        #right_most_word_path_length = np.count_nonzero(skeleton[right_most_word[1]:right_most_word[3], right_most_word[0]:right_most_word[2]])
+        right_most_word_path_length = skeleton_path_length(skeleton[right_most_word[1]:right_most_word[3], right_most_word[0]:right_most_word[2]])
+        right_most_word_boldness = (right_most_word_area / right_most_word_path_length)
+        right_most_word_width = right_most_word[2] - right_most_word[0]
+        right_most_word_height = right_most_word[3] - right_most_word[1]
+
+        print("right most word , second to last word")
+        print(f"area: {right_most_word_area}, {second_to_last_word_area}")
+        print(f"path length: {right_most_word_path_length}, {second_to_last_word_path_length}")
+        print(f"boldness: {right_most_word_boldness}, {second_to_last_word_boldness}")
+        print(f"width: {right_most_word_width}, {second_to_last_word_width}")
+        print(f"height: {right_most_word_height}, {second_to_last_word_height}")
+
+        if abs(right_most_word_boldness - second_to_last_word_boldness) < boldness_thresh and \
+           abs(right_most_word_width - second_to_last_word_width) < width_thresh:
             detected_hw_boxes.append(second_to_last_word)
             if debug: print("DEBUG: Multi-word headword detected.")
 
+        # Check whether the second to last word boldness is close to the right most word boldness
+        #if 1 - second_word_thresh < second_to_last_word_boldness/right_most_word_boldness < 1 + second_word_thresh:
+        #    detected_hw_boxes.append(second_to_last_word)
+        #    if debug: print("DEBUG: Multi-word headword detected.")
+
+        #if is_rectangle_nonempty(second_to_last_word, clean_bold_mask):
+        #    detected_hw_boxes.append(second_to_last_word)
+        #    if debug: print("DEBUG: Multi-word headword detected.")
+
+        # Check whether the area of the second to last word is close to the right most word
+        #if 1 - second_word_thresh < second_to_last_word_area/right_most_word_area < 1 + second_word_thresh:
+        #    detected_hw_boxes.append(second_to_last_word)
+        #    if debug: print("DEBUG: Multi-word headword detected.")
     # --- 5. Merge Bounding Boxes ---
     # Calculate the bounding box that encompasses all detected head word parts
     x1_hw = min(rect[0] for rect in detected_hw_boxes)
@@ -199,6 +254,24 @@ def detect_entry_head_word(entry_first_line_image, min_area=160, bold_thresh=30,
         cv2.waitKey(0)  # Wait for key press to continue
 
     return head_word_rect
+
+
+import math
+
+def skeleton_path_length(skel):
+    points = np.column_stack(np.where(skel > 0))
+    skel_set = set(map(tuple, points))
+
+    length = 0.0
+    for y, x in skel_set:
+        for dy, dx in [(-1,0),(1,0),(0,-1),(0,1),
+                       (-1,-1),(-1,1),(1,-1),(1,1)]:
+            ny, nx = y+dy, x+dx
+            if (ny, nx) in skel_set:
+                length += math.sqrt(dx*dx + dy*dy)
+
+    return length / 2  # avoid double counting
+
 
 
 def words_segmentation(text_line_image, debug=False):
@@ -288,3 +361,14 @@ def words_segmentation(text_line_image, debug=False):
     words_rect = [(int(x1), int(y1), int(x2), int(y2)) for (x1, y1, x2, y2) in words_rect]
 
     return words_rect
+
+
+
+
+
+if __name__ == '__main__':
+    print("Head word detection test")
+    entry_image = cv2.imread("/mnt/E0B80D7EB80D5506/sokhan/out/entries/0152_1_02.png")
+    entry_image = cv2.cvtColor(entry_image, cv2.COLOR_BGR2GRAY)
+    entry_first_line_image = entry_image[0:65, :]
+    head_word_rect = detect_entry_head_word(entry_first_line_image, debug=True)
